@@ -27,6 +27,9 @@ import pandas as pd
 import pickle
 import json
 
+
+
+
 def _preprocess_data(data):
     """Private helper function to preprocess data for model prediction.
 
@@ -59,11 +62,73 @@ def _preprocess_data(data):
     # ---------------------------------------------------------------
 
     # ----------- Replace this code with your own preprocessing steps --------
-    predict_vector = feature_vector_df[['Pickup Lat','Pickup Long',
-                                        'Destination Lat','Destination Long']]
+    new_df = feature_vector_df.copy()
+    #Dropping columns
+    
+    new_df.drop(["Arrival at Destination - Day of Month","Arrival at Destination - Weekday (Mo = 1)","Arrival at Destination - Time"],axis = 1,inplace =True)
+
+    new_df.pop('Temperature')
+    ##START coding time hours (24hr period)
+    holder = []
+    time_binary = ['Placement - Time', 'Confirmation - Time', 'Arrival at Pickup - Time', 'Pickup - Time']
+    for x in new_df[time_binary]:
+        holder = pd.to_datetime(new_df[x]).dt.hour
+        new_df[x] = holder
+    ##END coding time hours (24hr period)
+
+    ##START reverse geocoding
+    #Installing the reverse geocoding
+    #pip install reverse_geocoder
+    
+    #Creating PICK_UP name DF
+    pick_up_la = new_df['Pickup Lat'].values 
+    pick_up_lo = new_df['Pickup Long'].values
+
+    pic_dest = pd.DataFrame(np.concatenate((pick_up_la.reshape(len(pick_up_la),1), pick_up_lo.reshape(len(pick_up_lo),1)),1))
+    pic_dest['GPS'] = pic_dest.apply(tuple, axis=1) #Create useable search tuple
+
+    pick_up = pic_dest['GPS'].values
+    searcher_pic = rg.search(list(pick_up))
+    pick_df = pd.DataFrame(searcher_pic) #final frame with PICK_UP LOC
+
+    #Creating DESTINATION name DF
+
+    dest_la = new_df['Destination Lat'].values 
+    dest_lo = new_df['Destination Long'].values
+
+    del_dest = pd.DataFrame(np.concatenate((dest_la.reshape(len(dest_la),1), dest_lo.reshape(len(dest_lo),1)),1))
+    del_dest['GPS'] = del_dest.apply(tuple, axis=1) #Create useable search tuple
+
+    deliveries = del_dest['GPS'].values
+    searcher_del = rg.search(list(deliveries))
+    dest_df = pd.DataFrame(searcher_del) #final frame with DEST LOC
+
+    new_df['Destination'] = dest_df['admin1'].values
+    new_df['Pick_up'] = pick_df['admin1'].values
+    ## END reverse geocoding
+    ##STAR df features to be removed
+    new_df.pop('Time from Pickup to Arrival')
+    new_df.pop('User Id')
+    new_df.pop('Placement - Day of Month')
+    new_df.pop('Confirmation - Day of Month')
+    new_df.pop('Arrival at Pickup - Day of Month')
+    new_df.pop('Pickup - Day of Month')
+    new_df.pop('Personal or Business')
+    new_df.pop('Pickup Lat')
+    new_df.pop('Pickup Long')
+    new_df.pop('Destination Lat')
+    new_df.pop('Destination Long')
+    new_df.pop('Rider Id')
+    new_df.pop('Precipitation in millimeters')
+    new_df.pop('Pickup - Weekday (Mo = 1)')
+    new_df.pop('Placement - Weekday (Mo = 1)')
+    new_df.pop('Destination')
+    new_df.pop('Vehicle Type')
+    new_df.pop('Pick_up')
+
     # ------------------------------------------------------------------------
 
-    return predict_vector
+    return new_df
 
 def load_model(path_to_model:str):
     """Adapter function to load our pretrained model into memory.
